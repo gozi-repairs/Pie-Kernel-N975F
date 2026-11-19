@@ -35,11 +35,11 @@ toolchain = {
         'CC': 'toolchain/clang-12/host/linux-x86/clang-r416183c/bin/clang'  #12.06
     },
     'clang-14': {
-        'CROSS_COMPILE': 'toolchain/samsung/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-',
+        'CROSS_COMPILE': 'toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/aarch64-linux-android-',
         #'CLANG_TRIPLE': 'toolchain/clang-14/clang/host/linux-x86/clang-r437112/bin/aarch64-linux-gnu-', # 14.0.0
         #'CC': 'toolchain/clang-14/host/linux-x86/clang-r437112/bin/clang'  #14.0.0
-        'CLANG_TRIPLE': 'toolchain/clang-14/clang/host/linux-x86/clang-r437112b/bin/aarch64-linux-gnu-', # 14.0.1
-        'CC': 'toolchain/clang-14/host/linux-x86/clang-r437112b/bin/clang'  #14.0.1
+        'CLANG_TRIPLE': '/usr/bin/aarch64-linux-gnu-', # 14.0.1
+        'CC': '/usr/bin/clang-14'  #14.0.1
     },
     'proton': {
         'CROSS_COMPILE': 'toolchain/proton/bin/aarch64-linux-gnu-',
@@ -287,7 +287,7 @@ def parse_args():
                             'model',
                             'os_patch_level',
                             'toolchain',
-                            'magisk',
+                            #'magisk',
                             'O' ]:
                 fatal('Unknown config {}.'.format(key))
 
@@ -318,10 +318,10 @@ def parse_args():
             elif key == 'toolchain':
                 if value not in toolchain:
                     fatal('Unknown toolchain: ' + value)
-            elif key == 'magisk':
-                if value != 'canary' and value != 'alpha' and not re.match('^v\d+\.\d+', value):
-                    fatal('Unknown magisk version: ' + value + ' (example: canary, alpha, v20.4, v19.4, ...)')
-                configs['kernel']['magisk']['version'] = value
+            #elif key == 'magisk':
+               # if value != 'canary' and value != 'alpha' and not re.match('^v\d+\.\d+', value):
+                   # fatal('Unknown magisk version: ' + value + ' (example: canary, alpha, v20.4, v19.4, ...)')
+                #configs['kernel']['magisk']['version'] = value
         else:
             switch = arg[0:1]
             enable = True if switch == '+' else False
@@ -403,13 +403,13 @@ def make_config(configs, model):
     if configs['kernel']['dtb']['enabled']: 
         config_model(model, objtree)
 
-def update_magisk(version):
-    cmd = ['usr/magisk/update_magisk.sh']
-    if version:
-        cmd.append(version)
-    run(cmd, check=True)
-    with open('usr/magisk/magisk_version', 'r') as fh:
-        print('Magisk Version: ' + fh.readline())
+#def update_magisk(version):
+   # cmd = ['usr/magisk/update_magisk.sh']
+   # if version:
+    #    cmd.append(version)
+    #run(cmd, check=True)
+    #with open('usr/magisk/magisk_version', 'r') as fh:
+       # print('Magisk Version: ' + fh.readline())
 
 def switch_toolchain(compiler):
     cc = os.path.abspath(get_toolchain_cc(compiler))
@@ -622,8 +622,8 @@ if __name__ == '__main__':
             if not os.path.exists(objtree + '/.config'):
                 make_config(configs, model)
 
-            if configs['kernel']['magisk']['enabled']:
-               update_magisk(configs['kernel']['magisk'].get('version'))
+            #if configs['kernel']['magisk']['enabled']:
+               #update_magisk(configs['kernel']['magisk'].get('version'))
             build(compiler, objtree)
             if not single_model:
                 os.remove(objtree + '/.config')

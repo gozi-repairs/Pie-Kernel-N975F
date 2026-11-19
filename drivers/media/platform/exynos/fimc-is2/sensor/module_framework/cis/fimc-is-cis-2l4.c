@@ -501,7 +501,6 @@ int sensor_2l4_cis_init(struct v4l2_subdev *subdev)
 	cis->need_mode_change = false;
 	cis->long_term_mode.sen_strm_off_on_step = 0;
 	cis->long_term_mode.sen_strm_off_on_enable = false;
-	cis->cis_data->cur_pattern_mode = SENSOR_TEST_PATTERN_MODE_OFF;
 #ifdef USE_CAMERA_MIPI_CLOCK_VARIATION
 	cis->mipi_clock_index_cur = CAM_MIPI_NOT_INITIALIZED;
 	cis->mipi_clock_index_new = CAM_MIPI_NOT_INITIALIZED;
@@ -1333,8 +1332,6 @@ int sensor_2l4_cis_retention_crc_check(struct v4l2_subdev *subdev)
 
 	if (crc_check == 0x01) {
 		info("[%s] retention SRAM CRC check: pass!\n", __func__);
-		/* init pattern */
-		fimc_is_sensor_write16(cis->client, 0x0600, 0x0000);
 
 		ret = sensor_2l4_cis_set_global_setting_retention(subdev);
 		if (ret < 0) {
@@ -1882,22 +1879,22 @@ int sensor_2l4_cis_set_exposure_time(struct v4l2_subdev *subdev, struct ae_param
 			if (MAX(target_exposure->long_val, target_exposure->short_val) > 80000) {
 				cit_shifter_idx = MIN(MAX(MAX(target_exposure->long_val, target_exposure->short_val) / 80000, 0), 16);
 				cit_shifter_val = MAX(cit_shifter_array[cit_shifter_idx], cis_data->frame_length_lines_shifter);
+				target_exposure->long_val = target_exposure->long_val / cit_denom_array[cit_shifter_val];
+				target_exposure->short_val = target_exposure->short_val / cit_denom_array[cit_shifter_val];
 			} else {
 				cit_shifter_val = (u16)(cis_data->frame_length_lines_shifter);
 			}
-			target_exposure->long_val = target_exposure->long_val / cit_denom_array[cit_shifter_val];
-			target_exposure->short_val = target_exposure->short_val / cit_denom_array[cit_shifter_val];
 			coarse_integration_time_shifter = ((cit_shifter_val<<8) & 0xFF00) + (cit_shifter_val & 0x00FF);
 			break;
 		default:
 			if (MAX(target_exposure->long_val, target_exposure->short_val) > 160000) {
 				cit_shifter_idx = MIN(MAX(MAX(target_exposure->long_val, target_exposure->short_val) / 160000, 0), 16);
 				cit_shifter_val = MAX(cit_shifter_array[cit_shifter_idx], cis_data->frame_length_lines_shifter);
+				target_exposure->long_val = target_exposure->long_val / cit_denom_array[cit_shifter_val];
+				target_exposure->short_val = target_exposure->short_val / cit_denom_array[cit_shifter_val];
 			} else {
 				cit_shifter_val = (u16)(cis_data->frame_length_lines_shifter);
 			}
-			target_exposure->long_val = target_exposure->long_val / cit_denom_array[cit_shifter_val];
-			target_exposure->short_val = target_exposure->short_val / cit_denom_array[cit_shifter_val];
 			coarse_integration_time_shifter = ((cit_shifter_val<<8) & 0xFF00) + (cit_shifter_val & 0x00FF);
 			break;
 		}
@@ -2273,14 +2270,9 @@ int sensor_2l4_cis_set_frame_duration(struct v4l2_subdev *subdev, u32 frame_dura
 		goto p_err;
 	}
 
-	cis_data = cis->cis_data;
-
-	if (frame_duration < cis_data->min_frame_us_time) {
-		dbg_sensor(1, "frame duration is less than min(%d)\n", frame_duration);
-		frame_duration = cis_data->min_frame_us_time;
-	}
-
 	sensor_2l4_frame_duration_backup = frame_duration;
+
+	cis_data = cis->cis_data;
 
 	if (sensor_2l4_ln_mode_delay_count > 0)
 		sensor_2l4_ln_mode_delay_count--;
@@ -2314,6 +2306,11 @@ int sensor_2l4_cis_set_frame_duration(struct v4l2_subdev *subdev, u32 frame_dura
 			}
 			break;
 		}
+	}
+
+	if (frame_duration < cis_data->min_frame_us_time) {
+		dbg_sensor(1, "frame duration is less than min(%d)\n", frame_duration);
+		frame_duration = cis_data->min_frame_us_time;
 	}
 
 	vt_pic_clk_freq_mhz = cis_data->pclk / (1000);
@@ -2991,9 +2988,7 @@ int sensor_2l4_cis_long_term_exposure(struct v4l2_subdev *subdev)
 	struct fimc_is_long_term_expo_mode *lte_mode;
 	unsigned char cit_lshift_val = 0;
 	unsigned char shift_count = 0;
-#ifdef USE_SENSOR_LONG_EXPOSURE_SHOT
-	u32 lte_expousre = 0;
-#endif
+
 	WARN_ON(!subdev);
 
 	cis = (struct fimc_is_cis *)v4l2_get_subdevdata(subdev);
@@ -3003,24 +2998,13 @@ int sensor_2l4_cis_long_term_exposure(struct v4l2_subdev *subdev)
 	/* LTE mode or normal mode set */
 	if (lte_mode->sen_strm_off_on_enable) {
 		if (lte_mode->expo[0] > 125000) {
-#ifdef USE_SENSOR_LONG_EXPOSURE_SHOT
-			lte_expousre = lte_mode->expo[0];
 			cit_lshift_val = (unsigned char)(lte_mode->expo[0] / 125000);
 			while (cit_lshift_val) {
 				cit_lshift_val = cit_lshift_val / 2;
-				lte_expousre = lte_expousre / 2;
-				shift_count++;
-			}
-			lte_mode->expo[0] = lte_expousre;
-#else
-			cit_lshift_val = (unsigned char)(lte_mode->expo[0] / 125000);
-			while (cit_lshift_val) {
-			    cit_lshift_val = cit_lshift_val / 2;
-			    if (cit_lshift_val > 0)
-			        shift_count++;
+				if (cit_lshift_val > 0)
+					shift_count++;
 			}
 			lte_mode->expo[0] = 125000;
-#endif 
 			ret |= fimc_is_sensor_write16(cis->client, 0xFCFC, 0x4000);
 			ret |= fimc_is_sensor_write8(cis->client, 0x0701, shift_count);
 			ret |= fimc_is_sensor_write8(cis->client, 0x0702, shift_count);
@@ -3697,7 +3681,6 @@ static struct fimc_is_cis_ops cis_ops_2l4 = {
 	.cis_wait_streamon = sensor_2l4_cis_wait_streamon,
 	.cis_data_calculation = sensor_2l4_cis_data_calc,
 	.cis_set_long_term_exposure = sensor_2l4_cis_long_term_exposure,
-	.cis_set_test_pattern = sensor_cis_set_test_pattern,
 #ifdef USE_CAMERA_MIPI_CLOCK_VARIATION
 	.cis_update_mipi_info = sensor_2l4_cis_update_mipi_info,
 	.cis_get_mipi_clock_string = sensor_2l4_cis_get_mipi_clock_string,

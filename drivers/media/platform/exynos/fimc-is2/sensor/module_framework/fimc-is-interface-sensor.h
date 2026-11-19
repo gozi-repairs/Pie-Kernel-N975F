@@ -242,7 +242,6 @@ typedef struct {
 	unsigned int cur_frame_us_time;
 	unsigned int cur_width;
 	unsigned int cur_height;
-	unsigned int cur_pattern_mode;
 	unsigned int pre_width;
 	unsigned int pre_height;
 
@@ -399,7 +398,6 @@ struct fimc_is_cis_ops {
 	int (*cis_set_laser_current)(struct v4l2_subdev *subdev, u32 value);
 	int (*cis_get_laser_photo_diode)(struct v4l2_subdev *subdev, u16 *value);
 	int (*cis_get_tof_tx_freq)(struct v4l2_subdev *subdev, u32 *value);
-	int (*cis_set_test_pattern)(struct v4l2_subdev *subdev, camera2_sensor_ctl_t *sensor_ctl);
 };
 
 struct fimc_is_sensor_ctl
@@ -845,8 +843,7 @@ struct fimc_is_cis_ext2_interface_ops {
 	int (*get_open_close_hint)(int* opening, int* closing);
 	int (*set_mainflash_duration)(struct fimc_is_sensor_interface *itf,
 				u32 mainflash_duration);
-	int(*set_previous_dm)(struct fimc_is_sensor_interface *itf);
-	void *reserved[14];
+	void *reserved[15];
 };
 
 struct fimc_is_cis_event_ops {

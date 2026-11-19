@@ -268,10 +268,11 @@ static int fimc_is_ixs_video_querycap(struct file *file, void *fh,
 
 	snprintf(cap->driver, sizeof(cap->driver), "%s", video->vd.name);
 	snprintf(cap->card, sizeof(cap->card), "%s", video->vd.name);
-	cap->capabilities |= V4L2_CAP_STREAMING
-				| V4L2_CAP_VIDEO_OUTPUT
-				| V4L2_CAP_VIDEO_OUTPUT_MPLANE;
-	cap->device_caps |= cap->capabilities;
+	cap->bus_info[0] = 0;
+	cap->version = KERNEL_VERSION(1, 0, 0);
+	cap->capabilities = V4L2_CAP_STREAMING
+				| V4L2_CAP_VIDEO_CAPTURE
+				| V4L2_CAP_VIDEO_CAPTURE_MPLANE;
 
 	return 0;
 }

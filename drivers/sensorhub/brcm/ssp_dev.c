@@ -121,7 +121,7 @@ static int __init bootmode_setup(char *str)
 {
 	get_option(&str, &bootmode);
 	pr_info("[SSP] %s  = %d\n", __func__,  bootmode);
-	return 0;
+	return 1;
 }
 __setup("bootmode=", bootmode_setup);
 
@@ -442,14 +442,7 @@ irqreturn_t ssp_shub_int_handler(int irq, void *device)
 	data->ts_stacked_cnt = (data->ts_stacked_cnt + 1) % SIZE_TIMESTAMP_BUFFER;
 	data->ts_index_buffer[data->ts_stacked_cnt] = timestamp;
 
-#if defined(CONFIG_SENSORS_SSP_BEYOND) || defined(CONFIG_SENSORS_SSP_DAVINCI)
-	
 	ssp_debug_time("[SSP_IRQ] ts_stacked_cnt %d timestamp %llu\n", data->ts_stacked_cnt, timestamp);
-	
-	gpio_set_value(data->pin_ap_sleep, 0);
-	udelay(10);
-	gpio_set_value(data->pin_ap_sleep, 1);
-#endif
 	return IRQ_HANDLED;
 }
 #endif
@@ -805,7 +798,7 @@ static int panel_notifier_callback(struct notifier_block *self, unsigned long ev
 		pr_info("[SSP] %s PANEL_EVENT_BL_CHANGED %d %d\n",
 				__func__, evdata->brightness, evdata->aor_ratio);
 	} else {
-		pr_info("[SSP] %s unknown event %lu\n", __func__, event);
+		pr_info("[SSP] %s unknown event %d\n", __func__, event);
 	}
 
 	// store these values for reset

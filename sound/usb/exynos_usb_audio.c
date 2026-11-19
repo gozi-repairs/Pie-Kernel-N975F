@@ -44,6 +44,7 @@
 void exynos_usb_audio_set_device(struct usb_device *udev)
 {
 	usb_audio->udev = udev;
+	usb_audio->is_audio = 1;
 }
 
 int exynos_usb_audio_map_buf(struct usb_device *udev)
@@ -209,8 +210,7 @@ int exynos_usb_audio_setintf(struct usb_device *udev, int iface, int alt, int di
 	}
 
 	if (DEBUG)
-		dev_info(&udev->dev, "USB_AUDIO_IPC : %s, alt = %d\n",
-				__func__, alt);
+		dev_info(&udev->dev, "USB_AUDIO_IPC : %s ", __func__);
 
 	if (!usb_audio->is_audio || !otg_connection) {
 		dev_info(dev, "USB_AUDIO_IPC : is_audio is 0. return!\n");
@@ -244,11 +244,6 @@ int exynos_usb_audio_setintf(struct usb_device *udev, int iface, int alt, int di
 			if (!left_time)
 				dev_info(dev, "%s: timeout for IN connection done\n");
 		}
-	}
-
-	if (!usb_audio->is_audio || !otg_connection) {
-		dev_info(dev, "USB_AUDIO_IPC : is_audio = 0. return!\n");
-		return -1;
 	}
 
 	mutex_lock(&usb_audio->lock);
@@ -432,7 +427,7 @@ int exynos_usb_audio_hcd(struct usb_device *udev)
 	 */
 	if (ret == -EADDRINUSE) {
 		cancel_work_sync(&usb_audio->usb_work);
-		pr_err("iommu unmapping not done. unmap here %d\n", ret);
+		pr_err("iommu unmapping not done. unmap here\n", ret);
 		exynos_usb_audio_unmap_all();
 		ret = abox_iommu_map(dev, USB_AUDIO_XHCI_BASE,
 				USB_AUDIO_XHCI_BASE, PAGE_SIZE * 16, 0);
@@ -605,7 +600,6 @@ int exynos_usb_audio_conn(int is_conn)
 	if (!is_conn) {
 		if (usb_audio->is_audio) {
 			usb_audio->is_audio = 0;
-			usb_audio->usb_audio_state = USB_AUDIO_REMOVING;
 			ret = abox_start_ipc_transaction(dev, msg.ipcid, &msg, sizeof(msg), 0, 0);
 			if (ret) {
 				pr_err("erap usb dis_conn control failed\n");
@@ -621,13 +615,12 @@ int exynos_usb_audio_conn(int is_conn)
 		usb_audio->fb_indeq_map_done = 0;
 		usb_audio->fb_outdeq_map_done = 0;
 		usb_audio->pcm_open_done = 0;
-		reinit_completion(&usb_audio->discon_done);
 		ret = abox_start_ipc_transaction(dev, msg.ipcid, &msg, sizeof(msg), 0, 1);
 		if (ret) {
 			pr_err("erap usb conn control failed\n");
 			return -1;
 		}
-		usb_audio->usb_audio_state = USB_AUDIO_CONNECT;
+
 	}
 
 	return 0;
@@ -707,16 +700,7 @@ void exynos_usb_audio_work(struct work_struct *w)
 {
 	pr_info("%s\n", __func__);
 
-	/* Don't unmap in USB_AUDIO_TIMEOUT_PROBE state */
-	if (usb_audio->usb_audio_state !=
-			USB_AUDIO_REMOVING) {
-		pr_info("%s, not removing state\n", __func__);
-		return;
-	}
-
 	exynos_usb_audio_unmap_all();
-	usb_audio->usb_audio_state = USB_AUDIO_DISCONNECT;
-	complete(&usb_audio->discon_done);
 }
 
 irqreturn_t exynos_usb_audio_irq_handler(int irq, void *dev_id, ABOX_IPC_MSG *msg)
@@ -736,11 +720,7 @@ irqreturn_t exynos_usb_audio_irq_handler(int irq, void *dev_id, ABOX_IPC_MSG *ms
 					pr_info("irq : %d /* param1 : 1 , IN EP task done */\n", irq);
 				} else {
 					pr_info("irq : %d /* param0 : 0 , OUT EP task done */\n", irq);
-					/* Don't schedule in TIMEOUT_PROBE */
-					if (usb_audio->usb_audio_state ==
-							USB_AUDIO_REMOVING)
-						schedule_work(&usb_audio
-							->usb_work);
+					schedule_work(&usb_audio->usb_work);
 				}
 				break;
 			case IPC_USB_STOP_DONE:
@@ -792,13 +772,11 @@ int exynos_usb_audio_init(struct device *dev, struct platform_device *pdev)
 	mutex_init(&usb_audio->lock);
 	init_completion(&usb_audio->in_conn_stop);
 	init_completion(&usb_audio->out_conn_stop);
-	init_completion(&usb_audio->discon_done);
 	usb_audio->abox = pdev_abox;
 	usb_audio->hcd_pdev = pdev;
 	usb_audio->udev = NULL;
 	usb_audio->is_audio = 0;
 	usb_audio->is_first_probe = 1;
-	usb_audio->usb_audio_state = USB_AUDIO_DISCONNECT;
 
 	abox_register_ipc_handler(&pdev_abox->dev, IPC_ERAP,
 				exynos_usb_audio_irq_handler, &usb_audio);

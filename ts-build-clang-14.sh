@@ -57,7 +57,7 @@ MAIN()
     #elif [ $MODEL = "N971N" ]; then
     #./build mkimg model=N971N name="$K_NAME-$K_BASE-$ANDROID-$MODEL-$K_VERSION" toolchain=clang-14 +magisk +dtb
     elif [ $MODEL = "N975F" ]; then
-    ./build mkimg model=N975F name="$K_NAME-$K_BASE-$ANDROID-$MODEL-$K_VERSION" toolchain=clang-14 +magisk +dtb
+    ./build mkimg model=N975F name="GoziKernel-$ANDROID-$MODEL-$K_VERSION" toolchain=clang-14 +dtb
     #elif [ $MODEL = "N976N" ]; then
     #./build mkimg model=N976N name="$K_NAME-$K_BASE-$ANDROID-$MODEL-$K_VERSION" toolchain=clang-14 +magisk +dtb
     elif [ $MODEL = "N976B" ]; then

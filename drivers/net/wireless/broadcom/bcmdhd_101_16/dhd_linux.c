@@ -14296,10 +14296,18 @@ int
 dhd_os_get_img_fwreq(const struct firmware **fw, char *file_path)
 {
 	int ret = BCME_ERROR;
+	const char *name = file_path;
 
-	ret = request_firmware(fw, file_path, dhd_bus_to_dev(g_dhd_pub->bus));
+	/* Platform/HAL passes absolute paths (/vendor/etc/wifi/...), but
+	 * request_firmware() wants a name relative to its search dirs.
+	 */
+	if (file_path && file_path[0] == '/')
+		name = kbasename(file_path);
+
+	ret = request_firmware(fw, name, dhd_bus_to_dev(g_dhd_pub->bus));
 	if (ret < 0) {
-		DHD_ERROR(("%s: request_firmware err: %d\n", __FUNCTION__, ret));
+		DHD_ERROR(("%s: request_firmware(%s) err: %d\n",
+			__FUNCTION__, name, ret));
 		/* convert to BCME_NOTFOUND error for error handling */
 		ret = BCME_NOTFOUND;
 	}

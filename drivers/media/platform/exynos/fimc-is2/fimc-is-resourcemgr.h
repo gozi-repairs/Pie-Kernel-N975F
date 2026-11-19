@@ -151,14 +151,9 @@ struct fimc_is_resourcemgr {
 	struct mutex				rsc_lock;
 	/* for sysreg setting */
 	struct mutex				sysreg_lock;
-
-	u32					shot_timeout;
-	int					shot_timeout_tick;
-
-	u32					streaming_cnt;
 };
 
-int __init fimc_is_resourcemgr_probe(struct fimc_is_resourcemgr *resourcemgr, void *private_data, struct platform_device *pdev);
+int fimc_is_resourcemgr_probe(struct fimc_is_resourcemgr *resourcemgr, void *private_data, struct platform_device *pdev);
 int fimc_is_resource_open(struct fimc_is_resourcemgr *resourcemgr, u32 rsc_type, void **device);
 int fimc_is_resource_get(struct fimc_is_resourcemgr *resourcemgr, u32 rsc_type);
 int fimc_is_resource_put(struct fimc_is_resourcemgr *resourcemgr, u32 rsc_type);

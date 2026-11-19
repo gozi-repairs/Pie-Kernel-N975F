@@ -93,9 +93,6 @@ static irqreturn_t abox_wdma_ipc_handler(int ipc, void *dev_id,
 	case PCM_PLTDAI_ACK:
 		data->ack_enabled = !!pcmtask_msg->param.trigger;
 		break;
-	case PCM_PLTDAI_CLOSED:
-		complete(&data->closed);
-		break;
 	default:
 		dev_warn(dev, "unknown message: %d\n", pcmtask_msg->msgtype);
 		return IRQ_NONE;
@@ -414,7 +411,6 @@ static int abox_wdma_close(struct snd_pcm_substream *substream)
 	struct abox_data *abox_data = data->abox_data;
 	int id = data->id;
 	int ret;
-	long time;
 	ABOX_IPC_MSG msg;
 	struct IPC_PCMTASK_MSG *pcmtask_msg = &msg.msg.pcmtask;
 
@@ -435,11 +431,6 @@ static int abox_wdma_close(struct snd_pcm_substream *substream)
 		if (ret < 0)
 			dev_warn(dev, "call notify failed: %d\n", ret);
 	}
-
-	time = wait_for_completion_timeout(&data->closed,
-			nsecs_to_jiffies(ABOX_DMA_TIMEOUT_NS));
-	if (time == 0)
-		dev_err(dev, "%s: timeout\n", __func__);
 
 	/* Release ASRC to reuse it in other DMA */
 	abox_cmpnt_asrc_release(abox_data->cmpnt, SNDRV_PCM_STREAM_CAPTURE, id);
@@ -468,13 +459,10 @@ static int abox_wdma_mmap(struct snd_pcm_substream *substream,
 	dev_info(dev, "%s bytes(%d) size(%d)\n", __func__,
 			runtime->dma_bytes, data->ion_buf.size);
 
-	if (data->buf_type == BUFFER_TYPE_ION)
-		return dma_buf_mmap(data->ion_buf.dma_buf, vma, 0);
-	else
-		return dma_mmap_writecombine(dev, vma,
-				runtime->dma_area,
-				runtime->dma_addr,
-				runtime->dma_bytes);
+	return dma_mmap_writecombine(dev, vma,
+			runtime->dma_area,
+			runtime->dma_addr,
+			runtime->dma_bytes);
 }
 
 static int abox_wdma_ack(struct snd_pcm_substream *substream)
@@ -800,8 +788,6 @@ static int samsung_abox_wdma_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 	}
 	data->abox_data = dev_get_drvdata(data->dev_abox);
-
-	init_completion(&data->closed);
 
 	abox_register_ipc_handler(data->dev_abox, IPC_PCMCAPTURE,
 			abox_wdma_ipc_handler, data->abox_data);

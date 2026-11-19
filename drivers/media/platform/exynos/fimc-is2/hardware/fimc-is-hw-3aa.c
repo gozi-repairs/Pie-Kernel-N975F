@@ -158,7 +158,6 @@ int fimc_is_hw_3aa_mode_change(struct fimc_is_hw_ip *hw_ip, u32 instance, ulong 
 	struct fimc_is_frame *frame = NULL;
 	struct fimc_is_framemgr *framemgr;
 	struct camera2_shot *shot = NULL;
-	unsigned long flags;
 
 	if (!test_bit_variables(hw_ip->id, &hw_map))
 		return 0;
@@ -177,9 +176,11 @@ int fimc_is_hw_3aa_mode_change(struct fimc_is_hw_ip *hw_ip, u32 instance, ulong 
 		framemgr = hw_ip->framemgr;
 		FIMC_BUG(!framemgr);
 
-		framemgr_e_barrier_irqs(framemgr, 0, flags);
+		framemgr_e_barrier(framemgr, 0);
+		msinfo_hw("wait peek_frame\n", instance, hw_ip);
 		frame = peek_frame(framemgr, FS_HW_CONFIGURE);
-		framemgr_x_barrier_irqr(framemgr, 0, flags);
+		msinfo_hw("end peek_frame\n", instance, hw_ip);
+		framemgr_x_barrier(framemgr, 0);
 		if (frame) {
 			shot = frame->shot;
 		} else {

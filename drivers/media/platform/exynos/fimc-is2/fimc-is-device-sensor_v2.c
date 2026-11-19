@@ -1714,6 +1714,7 @@ int fimc_is_sensor_open(struct fimc_is_device_sensor *device,
 	 */
 	clear_bit(FIMC_IS_SENSOR_S_INPUT, &device->state);
 	clear_bit(FIMC_IS_SENSOR_S_CONFIG, &device->state);
+	clear_bit(FIMC_IS_SENSOR_DRIVING, &device->state);
 	clear_bit(FIMC_IS_SENSOR_STAND_ALONE, &device->state);
 	clear_bit(FIMC_IS_SENSOR_FRONT_START, &device->state);
 	clear_bit(FIMC_IS_SENSOR_FRONT_DTP_STOP, &device->state);
@@ -3333,7 +3334,7 @@ int fimc_is_sensor_front_start(struct fimc_is_device_sensor *device,
 		mutex_lock(&camif_path_lock);
 		ret = fimc_is_hw_camif_fix_up(device);
 		if (ret) {
-			merr("failed to fix up CAM I/F(%d)", device, ret);
+			merr("failed to fix up CAM I/F", device, ret);
 			ret = -EINVAL;
 			mutex_unlock(&camif_path_lock);
 			goto p_err;
@@ -3341,7 +3342,7 @@ int fimc_is_sensor_front_start(struct fimc_is_device_sensor *device,
 
 		ret = fimc_is_hw_camif_pdp_in_enable(device, true);
 		if (ret) {
-			merr("failed to enable PDP IN(%d)", device, ret);
+			merr("failed to enable PDP IN", device, ret);
 			ret = -EINVAL;
 			mutex_unlock(&camif_path_lock);
 			goto p_err;
@@ -3451,7 +3452,7 @@ int fimc_is_sensor_front_stop(struct fimc_is_device_sensor *device)
 	if (IS_ENABLED(USE_CAMIF_FIX_UP)) {
 		ret = fimc_is_hw_camif_pdp_in_enable(device, false);
 		if (ret)
-			merr("failed to enable PDP IN(%d)", device, ret);
+			merr("failed to enable PDP IN", device, ret);
 	}
 
 reset_the_others:
@@ -3471,7 +3472,6 @@ reset_the_others:
 		break;
 	}
 
-	dual_info->max_fps[device->position] = 0;
 #ifdef ENABLE_DTP
 	if (device->dtp_check) {
 		device->dtp_check = false;

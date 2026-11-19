@@ -71,7 +71,7 @@
 #if defined(CONFIG_FOLDER_HALL)
 #define HALLIC_PATH		"/sys/class/sec/sec_flip/flipStatus"
 #else
-#define HALLIC_PATH		"/sys/class/sec/hall_ic/hall_detect"
+#define HALLIC_PATH		"/sys/class/sec/sec_key/hall_detect"
 #endif
 
 struct sx9360_p {
@@ -120,23 +120,19 @@ struct sx9360_p {
 	s16 max_normal_diff;
 
 	int debug_count;
-
-#define HALL_IC_LEN 6
-	char hall_ic[HALL_IC_LEN];
-
+	char hall_ic[6];
 #if !defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_MCC_THRESHOLD_CHANGE)
 	int mcc;
 	u8 default_threshold;
-	u8 mcc_threshold;
 #endif	
 };
 
-static int sx9360_check_hallic_state(char *file_path, char hall_ic_status[HALL_IC_LEN])
+static int sx9360_check_hallic_state(char *file_path, char hall_ic_status[])
 {
 	int iRet = 0;
 	mm_segment_t old_fs;
 	struct file *filep;
-	char hall_sysfs[HALL_IC_LEN];
+	char hall_sysfs[5];
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -158,7 +154,7 @@ static int sx9360_check_hallic_state(char *file_path, char hall_ic_status[HALL_I
 		set_fs(old_fs);
 		return -EIO;
 	} else {
-		strncpy(hall_ic_status, hall_sysfs, HALL_IC_LEN);
+		strncpy(hall_ic_status, hall_sysfs, sizeof(hall_sysfs));
 	}
 
 	filp_close(filep, current->files);
@@ -925,7 +921,7 @@ static ssize_t sx9360_normal_threshold_show(struct device *dev,
 		break;
 	}
 
-	return snprintf(buf, PAGE_SIZE, "%u,%u\n",
+	return snprintf(buf, PAGE_SIZE, "%lu,%lu\n",
 		(u32)threshold + (u32)hyst, (u32)threshold - (u32)hyst);
 }
 
@@ -990,7 +986,7 @@ static ssize_t sx9360_mcc_store(struct device *dev,
 		threshold = data->default_threshold; /* DEFAULT KOR THRESHOLD > 1912  */
 		sx9360_i2c_write(data, SX9360_PROXCTRL5_REG, threshold);
 	} else {
-		threshold = data->mcc_threshold;
+		threshold = 0x5C; /* EUR THRESHOLD > 4540 */
 		sx9360_i2c_write(data, SX9360_PROXCTRL5_REG, threshold);
 	}
 
@@ -1392,11 +1388,6 @@ static int sx9360_parse_dt(struct sx9360_p *data, struct device *dev)
 		setup_reg[SX9360_PROXTHRESH_REG_IDX].val = (u8)val;
 #if !defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_MCC_THRESHOLD_CHANGE)
 		data->default_threshold = val;
-	}
-	if (!sx9360_read_setupreg(dNode, SX9360_PROXTHRESH_MCC, &val)) {
-		data->mcc_threshold = val;
-	} else {
-		data->mcc_threshold = data->default_threshold;
 #endif
 	}
 

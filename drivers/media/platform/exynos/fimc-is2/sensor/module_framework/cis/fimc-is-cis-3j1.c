@@ -254,7 +254,6 @@ int sensor_3j1_cis_init(struct v4l2_subdev *subdev)
 	cis->cis_data->cur_height = SENSOR_3J1_MAX_HEIGHT;
 	cis->cis_data->low_expo_start = 33000;
 	cis->need_mode_change = false;
-	cis->cis_data->cur_pattern_mode = SENSOR_TEST_PATTERN_MODE_OFF;
 #ifdef USE_CAMERA_MIPI_CLOCK_VARIATION
 	cis->mipi_clock_index_cur = CAM_MIPI_NOT_INITIALIZED;
 	cis->mipi_clock_index_new = CAM_MIPI_NOT_INITIALIZED;
@@ -478,11 +477,11 @@ static void sensor_3j1_cis_set_paf_stat_enable(u32 mode, cis_shared_data *cis_da
 	case SENSOR_3J1_3968X2232_30FPS:
 	case SENSOR_3J1_3968X1880_30FPS:
 	case SENSOR_3J1_2944X2208_30FPS:
-	case SENSOR_3J1_3216X2208_30FPS:
 	case SENSOR_3J1_3216X1808_30FPS:
 	case SENSOR_3J1_3216X1528_30FPS:
 	case SENSOR_3J1_2208X2208_30FPS:
 	case SENSOR_3J1_1824X1368_30FPS:
+	case SENSOR_3J1_1988X1120_120FPS:
 	case SENSOR_3J1_1472X1104_30FPS:
 	case SENSOR_3J1_1616X904_30FPS:
 	case SENSOR_3J1_1616X768_30FPS:
@@ -1113,10 +1112,6 @@ int sensor_3j1_cis_adjust_frame_duration(struct v4l2_subdev *subdev,
 
 	vt_pic_clk_freq_mhz = cis_data->pclk / (1000 * 1000);
 	line_length_pck = cis_data->line_length_pck;
-	if ((cis_data->stream_on == false) && (input_exposure_time > SENSOR_3J1_EXPOSURE_TIME_MAX)) {
-		err("input_exposure_time is out of bound (%d -> %d)", input_exposure_time, SENSOR_3J1_EXPOSURE_TIME_MAX);
-		input_exposure_time = SENSOR_3J1_EXPOSURE_TIME_MAX;
-	}
 	frame_length_lines = ((vt_pic_clk_freq_mhz * input_exposure_time) / line_length_pck);
 	frame_length_lines += cis_data->max_margin_coarse_integration_time;
 
@@ -1981,7 +1976,6 @@ static struct fimc_is_cis_ops cis_ops = {
 	.cis_compensate_gain_for_extremely_br = sensor_cis_compensate_gain_for_extremely_br,
 	.cis_wait_streamoff = sensor_cis_wait_streamoff,
 	.cis_wait_streamon = sensor_cis_wait_streamon,
-	.cis_set_test_pattern = sensor_cis_set_test_pattern,
 #ifdef USE_CAMERA_MIPI_CLOCK_VARIATION
 	.cis_update_mipi_info = sensor_3j1_cis_update_mipi_info,
 	.cis_get_mipi_clock_string = sensor_3j1_cis_get_mipi_clock_string,

@@ -36,8 +36,7 @@ fimc-is-objs	:= fimc-is-core.o \
 		fimc-is-clk-gate.o \
 		fimc-is-binary.o \
 		fimc-is-i2c-config.o \
-		fimc-is-sock.o \
-		fimc-is-work.o
+		fimc-is-sock.o
 
 obj-$(CONFIG_DCP_V1_0) += fimc-is-video-dcp.o \
 			       fimc-is-video-dcps.o \
@@ -94,4 +93,3 @@ subdir-ccflags-$(CONFIG_FIMC_IS_V7_0_0) += -Idrivers/media/platform/exynos/fimc-
 
 subdir-ccflags-$(CONFIG_VENDER_DEFAULT) += -Idrivers/media/platform/exynos/fimc-is2/vendor/default
 subdir-ccflags-$(CONFIG_VENDER_MCD) += -Idrivers/media/platform/exynos/fimc-is2/vendor/mcd
-subdir-ccflags-y += -Wno-sizeof-pointer-memaccess

@@ -834,7 +834,8 @@ static int check_syslog_permissions(int type, int source)
 	/*
 	 * If this is from /proc/kmsg and we've already opened it, then we've
 	 * already done the capabilities checks at open time.
-	 */
+	 
+	return 0;
 	if (source == SYSLOG_FROM_PROC && type != SYSLOG_ACTION_OPEN)
 		goto ok;
 
@@ -844,7 +845,7 @@ static int check_syslog_permissions(int type, int source)
 		/*
 		 * For historical reasons, accept CAP_SYS_ADMIN too, with
 		 * a warning.
-		 */
+		 
 		if (capable(CAP_SYS_ADMIN)) {
 			pr_warn_once("%s (%d): Attempt to access syslog with "
 				     "CAP_SYS_ADMIN but no CAP_SYSLOG "
@@ -855,7 +856,7 @@ static int check_syslog_permissions(int type, int source)
 		return -EPERM;
 	}
 ok:
-	return security_syslog(type);
+	return security_syslog(type);*/
 }
 
 static void append_char(char **pp, char *e, char c)

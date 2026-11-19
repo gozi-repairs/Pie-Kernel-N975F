@@ -30,10 +30,6 @@
 #include "madera.h"
 #include "wm_adsp.h"
 
-#ifdef CONFIG_MORO_SOUND
-#include "moro_sound.h"
-#endif
-
 #define CS47L92_NUM_ADSP	1
 #define CS47L92_MONO_OUTPUTS	3
 
@@ -41,15 +37,6 @@ struct cs47l92 {
 	struct madera_priv core;
 	struct madera_fll fll[2];
 };
-
-#ifdef CONFIG_MORO_SOUND
-// pointer to regmap
-static struct regmap *map;
-// Switches
-static int moro_sound, eq, reset = 0;
-static void set_eq(bool reset);
-static void reset_moro_sound(void);
-#endif
 
 static const struct wm_adsp_region cs47l92_dsp1_regions[] = {
 	{ .type = WMFW_ADSP2_PM, .base = 0x080000 },
@@ -1986,12 +1973,6 @@ static int cs47l92_codec_probe(struct snd_soc_codec *codec)
 	unsigned int val = 0;
 
 	madera->dapm = snd_soc_codec_get_dapm(codec);
-
-#ifdef CONFIG_MORO_SOUND
-	moro_sound_hook_madera_pcm_probe(madera->regmap);
-
-	cs47l92->core.madera->dapm = snd_soc_codec_get_dapm(codec);
-#endif
 
 	ret = madera_init_inputs(codec,
 				 cs47l92_dmic_inputs,

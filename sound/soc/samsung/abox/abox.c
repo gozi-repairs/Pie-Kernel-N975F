@@ -987,7 +987,7 @@ void abox_request_dram_on(struct device *dev, unsigned int id, bool on)
 
 	ret = regmap_write(regmap, ABOX_SYSPOWER_CTRL, val);
 	if (ret < 0) {
-		dev_err(dev, "syspower write failed (%d)\n", ret);
+		dev_err(dev, "syspower write failed\n", ret);
 		return;
 	}
 
@@ -2218,18 +2218,17 @@ static void abox_request_extra_firmware(struct abox_data *data)
 			continue;
 
 		efw = abox_get_extra_firmware(data, name);
-		if (!efw) {
-			dev_info(dev, "new extra firmware %s\n", name);
+		if (!efw)
 			efw = devm_kzalloc(dev, sizeof(*efw), GFP_KERNEL);
-			list_add_tail(&efw->list, &data->firmware_extra);
-			efw->name = name;
-			efw->area = area;
-			efw->offset = offset;
-		}
 		if (!efw) {
 			dev_err(dev, "%s: no memory %s\n", __func__, name);
 			continue;
 		}
+
+		list_add_tail(&efw->list, &data->firmware_extra);
+		efw->name = name;
+		efw->area = area;
+		efw->offset = offset;
 
 		dev_dbg(dev, "%s: name=%s, area=%u, offset=%u\n", __func__,
 				efw->name, efw->area, efw->offset);
@@ -2592,10 +2591,10 @@ static int abox_modem_notifier(struct notifier_block *nb,
 	switch (action) {
 	case MODEM_EVENT_RESET:
 		system_msg->msgtype = ABOX_RESET_VSS;
+		break;
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
 		abox_debug_string_update(TYPE_MODEM_CPCRASH, NULL);
 #endif
-		break;
 	case MODEM_EVENT_EXIT:
 		system_msg->msgtype = ABOX_STOP_VSS;
 		abox_dbg_print_gpr(dev, data);

@@ -6751,7 +6751,6 @@ static int fimc_is_ischain_paf_shot(struct fimc_is_device_ischain *device,
 {
 	int ret = 0;
 	unsigned long flags;
-	struct fimc_is_resourcemgr *resourcemgr;
 	struct fimc_is_group *group, *child, *vra;
 	struct fimc_is_framemgr *framemgr;
 	struct fimc_is_frame *frame;
@@ -6764,15 +6763,14 @@ static int fimc_is_ischain_paf_shot(struct fimc_is_device_ischain *device,
 
 	mdbgs_ischain(4, "%s()\n", device, __func__);
 
-	resourcemgr = device->resourcemgr;
-	group = &device->group_paf;
 	frame = NULL;
+	group = &device->group_paf;
 
 	framemgr = GET_HEAD_GROUP_FRAMEMGR(group);
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -6780,7 +6778,7 @@ static int fimc_is_ischain_paf_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -6835,34 +6833,19 @@ static int fimc_is_ischain_paf_shot(struct fimc_is_device_ischain *device,
 		if (captureIntent != AA_CAPTURE_INTENT_CUSTOM) {
 			frame->shot->ctl.aa.captureIntent = captureIntent;
 			frame->shot->ctl.aa.vendor_captureCount = group->intent_ctl.vendor_captureCount;
-			frame->shot->ctl.aa.vendor_captureExposureTime = group->intent_ctl.vendor_captureExposureTime;
-			frame->shot->ctl.aa.vendor_captureEV = group->intent_ctl.vendor_captureEV;
 			if (group->remainIntentCount > 0) {
 				group->remainIntentCount--;
 			} else {
 				group->intent_ctl.captureIntent = AA_CAPTURE_INTENT_CUSTOM;
 				group->intent_ctl.vendor_captureCount = 0;
-				group->intent_ctl.vendor_captureExposureTime = 0;
-				group->intent_ctl.vendor_captureEV = 0;
 			}
-			minfo("frame count(%d), intent(%d), count(%d), EV(%d), captureExposureTime(%d) remainIntentCount(%d)\n",
-				device, frame->fcount,
+			if (group->intent_ctl.vendor_captureExposureTime > 0) {
+				frame->shot->ctl.aa.vendor_captureExposureTime = group->intent_ctl.vendor_captureExposureTime;
+				group->intent_ctl.vendor_captureExposureTime = 0;
+			}
+			minfo("frame count(%d), intent(%d), count(%d) captureExposureTime(%d) remainIntentCount(%d)\n", device, frame->fcount,
 				frame->shot->ctl.aa.captureIntent, frame->shot->ctl.aa.vendor_captureCount,
-				frame->shot->ctl.aa.vendor_captureEV, frame->shot->ctl.aa.vendor_captureExposureTime,
-				group->remainIntentCount);
-		}
-
-		/*
-		 * Adjust the shot timeout value based on sensor exposure time control.
-		 * Exposure Time >= (FIMC_IS_SHOT_TIMEOUT - 1sec): Increase shot timeout value.
-		 */
-		if (frame->shot->ctl.aa.vendor_captureExposureTime >= ((FIMC_IS_SHOT_TIMEOUT * 1000) - 1000000)) {
-			resourcemgr->shot_timeout = (frame->shot->ctl.aa.vendor_captureExposureTime / 1000) + FIMC_IS_SHOT_TIMEOUT;
-			resourcemgr->shot_timeout_tick = KEEP_FRAME_TICK_DEFAULT;
-		} else if (resourcemgr->shot_timeout_tick > 0) {
-			resourcemgr->shot_timeout_tick--;
-		} else {
-			resourcemgr->shot_timeout = FIMC_IS_SHOT_TIMEOUT;
+				frame->shot->ctl.aa.vendor_captureExposureTime, group->remainIntentCount);
 		}
 	}
 
@@ -6974,8 +6957,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_25, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -6984,7 +6965,6 @@ static int fimc_is_ischain_3aa_shot(struct fimc_is_device_ischain *device,
 {
 	int ret = 0;
 	unsigned long flags;
-	struct fimc_is_resourcemgr *resourcemgr;
 	struct fimc_is_group *group, *child, *vra;
 	struct fimc_is_framemgr *framemgr;
 	struct fimc_is_frame *frame;
@@ -6996,6 +6976,9 @@ static int fimc_is_ischain_3aa_shot(struct fimc_is_device_ischain *device,
 	uint32_t af_trigger_bk;
 	enum aa_afstate vendor_afstate_bk;
 	enum aa_capture_intent captureIntent_bk;
+	struct fimc_is_resourcemgr *resourcemgr;
+
+	resourcemgr = device->resourcemgr;
 #endif
 
 	mdbgs_ischain(4, "%s()\n", device, __func__);
@@ -7003,15 +6986,14 @@ static int fimc_is_ischain_3aa_shot(struct fimc_is_device_ischain *device,
 	FIMC_BUG(!device);
 	FIMC_BUG(!check_frame);
 
-	resourcemgr = device->resourcemgr;
-	group = &device->group_3aa;
 	frame = NULL;
+	group = &device->group_3aa;
 
 	framemgr = GET_HEAD_GROUP_FRAMEMGR(group);
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7019,7 +7001,7 @@ static int fimc_is_ischain_3aa_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7089,43 +7071,28 @@ static int fimc_is_ischain_3aa_shot(struct fimc_is_device_ischain *device,
 	if (test_bit(FIMC_IS_GROUP_OTF_INPUT, &group->state)) {
 		enum aa_capture_intent captureIntent;
 		captureIntent = group->intent_ctl.captureIntent;
-		
-		if (captureIntent != AA_CAPTURE_INTENT_CUSTOM) {
-			frame->shot->ctl.aa.captureIntent = captureIntent;
-			frame->shot->ctl.aa.vendor_captureCount = group->intent_ctl.vendor_captureCount;
-			frame->shot->ctl.aa.vendor_captureExposureTime = group->intent_ctl.vendor_captureExposureTime;
-			frame->shot->ctl.aa.vendor_captureEV = group->intent_ctl.vendor_captureEV;
-			if (group->remainIntentCount > 0) {
-				group->remainIntentCount--;
-			} else {
-				group->intent_ctl.captureIntent = AA_CAPTURE_INTENT_CUSTOM;
-				group->intent_ctl.vendor_captureCount = 0;
-				group->intent_ctl.vendor_captureExposureTime = 0;
-				group->intent_ctl.vendor_captureEV = 0;
-			}
-			minfo("frame count(%d), intent(%d), count(%d), EV(%d), captureExposureTime(%d) remainIntentCount(%d)\n",
-				device, frame->fcount,
-				frame->shot->ctl.aa.captureIntent, frame->shot->ctl.aa.vendor_captureCount,
-				frame->shot->ctl.aa.vendor_captureEV, frame->shot->ctl.aa.vendor_captureExposureTime,
-				group->remainIntentCount);
-		}
+
+                if (captureIntent != AA_CAPTURE_INTENT_CUSTOM) {
+                        frame->shot->ctl.aa.captureIntent = captureIntent;
+                        frame->shot->ctl.aa.vendor_captureCount = group->intent_ctl.vendor_captureCount;
+                        if (group->remainIntentCount > 0) {
+                                group->remainIntentCount--;
+                        } else {
+                                group->intent_ctl.captureIntent = AA_CAPTURE_INTENT_CUSTOM;
+                                group->intent_ctl.vendor_captureCount = 0;
+                        }
+                        if (group->intent_ctl.vendor_captureExposureTime > 0) {
+                                frame->shot->ctl.aa.vendor_captureExposureTime = group->intent_ctl.vendor_captureExposureTime;
+                                group->intent_ctl.vendor_captureExposureTime = 0;
+                        }
+                        minfo("frame count(%d), intent(%d), count(%d) captureExposureTime(%d) remainIntentCount(%d)\n", device, frame->fcount,
+                                frame->shot->ctl.aa.captureIntent, frame->shot->ctl.aa.vendor_captureCount,
+                                frame->shot->ctl.aa.vendor_captureExposureTime, group->remainIntentCount);
+                }
 
 		if (group->lens_ctl.aperture != 0) {
 			frame->shot->ctl.lens.aperture = group->lens_ctl.aperture;
 			group->lens_ctl.aperture = 0;
-		}
-
-		/*
-		 * Adjust the shot timeout value based on sensor exposure time control.
-		 * Exposure Time >= (FIMC_IS_SHOT_TIMEOUT - 1sec): Increase shot timeout value.
-		 */
-		if (frame->shot->ctl.aa.vendor_captureExposureTime >= ((FIMC_IS_SHOT_TIMEOUT * 1000) - 1000000)) {
-			resourcemgr->shot_timeout = (frame->shot->ctl.aa.vendor_captureExposureTime / 1000) + FIMC_IS_SHOT_TIMEOUT;
-			resourcemgr->shot_timeout_tick = KEEP_FRAME_TICK_DEFAULT;
-		} else if (resourcemgr->shot_timeout_tick > 0) {
-			resourcemgr->shot_timeout_tick--;
-		} else {
-			resourcemgr->shot_timeout = FIMC_IS_SHOT_TIMEOUT;
 		}
 	}
 
@@ -7236,8 +7203,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_25, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -7266,7 +7231,7 @@ static int fimc_is_ischain_isp_shot(struct fimc_is_device_ischain *device,
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7274,7 +7239,7 @@ static int fimc_is_ischain_isp_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7405,8 +7370,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_26, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -7433,7 +7396,7 @@ static int fimc_is_ischain_dis_shot(struct fimc_is_device_ischain *device,
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7441,7 +7404,7 @@ static int fimc_is_ischain_dis_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7535,8 +7498,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_27, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -7563,7 +7524,7 @@ static int fimc_is_ischain_dcp_shot(struct fimc_is_device_ischain *device,
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7571,7 +7532,7 @@ static int fimc_is_ischain_dcp_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7651,8 +7612,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_28, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -7680,7 +7639,7 @@ static int fimc_is_ischain_mcs_shot(struct fimc_is_device_ischain *device,
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7688,7 +7647,7 @@ static int fimc_is_ischain_mcs_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7789,8 +7748,6 @@ p_err:
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_29, flags);
 	}
 
-frame_err:
-framemgr_err:
 	return ret;
 }
 
@@ -7818,7 +7775,7 @@ static int fimc_is_ischain_vra_shot(struct fimc_is_device_ischain *device,
 	if (!framemgr) {
 		merr("framemgr is NULL", device);
 		ret = -EINVAL;
-		goto framemgr_err;
+		goto p_err;
 	}
 
 	frame = peek_frame(framemgr, FS_REQUEST);
@@ -7826,7 +7783,7 @@ static int fimc_is_ischain_vra_shot(struct fimc_is_device_ischain *device,
 	if (unlikely(!frame)) {
 		merr("frame is NULL", device);
 		ret = -EINVAL;
-		goto frame_err;
+		goto p_err;
 	}
 
 	if (unlikely(frame != check_frame)) {
@@ -7915,9 +7872,6 @@ p_err:
 		trans_frame(framemgr, frame, FS_PROCESS);
 		framemgr_x_barrier_irqr(framemgr, FMGR_IDX_30, flags);
 	}
-
-frame_err:
-framemgr_err:
 	return ret;
 }
 

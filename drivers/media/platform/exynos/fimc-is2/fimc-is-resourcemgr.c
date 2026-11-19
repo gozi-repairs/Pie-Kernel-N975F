@@ -343,7 +343,7 @@ static int fimc_is_resourcemgr_allocmem(struct fimc_is_resourcemgr *resourcemgr)
 	}
 	minfo->total_size += minfo->pb_taaisp->size;
 
-	info("[RSC] TAAISP_DMA memory size (aligned) : %08lx\n", (unsigned long) TAAISP_DMA_SIZE);
+	info("[RSC] TAAISP_DMA memory size (aligned) : %08lx\n", TAAISP_DMA_SIZE);
 
 	/* ME/DRC buffer */
 #if (MEDRC_DMA_SIZE > 0)
@@ -354,7 +354,7 @@ static int fimc_is_resourcemgr_allocmem(struct fimc_is_resourcemgr *resourcemgr)
 		return -ENOMEM;
 	}
 
-	info("[RSC] ME_DRC memory size (aligned) : %08lx\n", (unsigned long) MEDRC_DMA_SIZE);
+	info("[RSC] ME_DRC memory size (aligned) : %08lx\n", MEDRC_DMA_SIZE);
 
 	minfo->total_size += minfo->pb_medrc->size;
 #endif
@@ -623,7 +623,7 @@ static int fimc_is_resourcemgr_alloc_secure_mem(struct fimc_is_resourcemgr *reso
 		return -ENOMEM;
 	}
 
-	info("[RSC] TAAISP_DMA_S memory size (aligned) : %08lx\n", (unsigned long) TAAISP_DMA_SIZE);
+	info("[RSC] TAAISP_DMA_S memory size (aligned) : %08lx\n", TAAISP_DMA_SIZE);
 
 	/* ME/DRC buffer */
 #if (MEDRC_DMA_SIZE > 0)
@@ -636,7 +636,7 @@ static int fimc_is_resourcemgr_alloc_secure_mem(struct fimc_is_resourcemgr *reso
 		return -ENOMEM;
 	}
 
-	info("[RSC] ME_DRC_S memory size (aligned) : %08lx\n", (unsigned long) MEDRC_DMA_SIZE);
+	info("[RSC] ME_DRC_S memory size (aligned) : %08lx\n", MEDRC_DMA_SIZE);
 #endif
 
 	return 0;
@@ -1260,7 +1260,7 @@ static struct notifier_block notify_reboot_block = {
 };
 #endif
 
-int __init fimc_is_resourcemgr_probe(struct fimc_is_resourcemgr *resourcemgr,
+int fimc_is_resourcemgr_probe(struct fimc_is_resourcemgr *resourcemgr,
 	void *private_data, struct platform_device *pdev)
 {
 	int ret = 0;
@@ -1304,8 +1304,6 @@ int __init fimc_is_resourcemgr_probe(struct fimc_is_resourcemgr *resourcemgr,
 	resourcemgr->tmu_notifier.priority = 0;
 	resourcemgr->tmu_state = ISP_NORMAL;
 	resourcemgr->limited_fps = 0;
-
-	resourcemgr->streaming_cnt = 0;
 
 	/* bus monitor unit */
 
@@ -1560,8 +1558,6 @@ int fimc_is_resource_get(struct fimc_is_resourcemgr *resourcemgr, u32 rsc_type)
 			atomic_set(&core->i2c_rsccount[i], 0);
 
 		resourcemgr->global_param.state = 0;
-		resourcemgr->shot_timeout = FIMC_IS_SHOT_TIMEOUT;
-		resourcemgr->shot_timeout_tick = 0;
 
 #ifdef ENABLE_DYNAMIC_MEM
 		ret = fimc_is_resourcemgr_init_dynamic_mem(resourcemgr);

@@ -209,8 +209,6 @@ enum {
 #define MSG2SSP_AP_STATUS_RESET		0xD5
 #define MSG2SSP_AP_STATUS_POW_CONNECTED	0xD6
 #define MSG2SSP_AP_STATUS_POW_DISCONNECTED	0xD7
-#define MSG2SSP_AP_STATUS_SCONTEXT_WAKEUP	0x97
-#define MSG2SSP_AP_STATUS_SCONTEXT_SLEEP	0x98
 #define MSG2SSP_AP_TEMPHUMIDITY_CAL_DONE	0xDA
 #define MSG2SSP_AP_MCU_SET_DUMPMODE		0xDB
 #define MSG2SSP_AP_MCU_DUMP_CHECK		0xDC
@@ -1019,7 +1017,7 @@ struct ssp_data {
 /* AP suspend check flag*/
         bool IsAPsuspend;
 /* no ack about mcu_resp pin*/
-        int IsNoRespCnt;
+        bool IsNoRespCnt;
 /* hall ic */
 	bool hall_ic_status; // 0: open 1: close
 };

@@ -1349,9 +1349,6 @@ static irqreturn_t abox_rdma_ipc_handler(int ipc, void *dev_id,
 	case PCM_PLTDAI_ACK:
 		data->ack_enabled = !!pcmtask_msg->param.trigger;
 		break;
-	case PCM_PLTDAI_CLOSED:
-		complete(&data->closed);
-		break;
 	default:
 		dev_warn(dev, "unknown message: %d\n", pcmtask_msg->msgtype);
 		return IRQ_NONE;
@@ -1425,7 +1422,7 @@ static int abox_rdma_hw_params(struct snd_pcm_substream *substream,
 			dev_info(dev, "dma buffer changed\n");
 		}
 	} else if (data->buf_type == BUFFER_TYPE_ION) {
-		dev_info(dev, "ion_buffer %s bytes(%zu) size(%zu)\n",
+		dev_info(dev, "ion_buffer %s bytes(%d) size(%d)\n",
 				__func__,
 				buffer_bytes, data->ion_buf.size);
 	} else {
@@ -1699,7 +1696,6 @@ static int abox_rdma_close(struct snd_pcm_substream *substream)
 	struct abox_data *abox_data = data->abox_data;
 	int id = data->id;
 	int ret;
-	long time;
 	ABOX_IPC_MSG msg;
 	struct IPC_PCMTASK_MSG *pcmtask_msg = &msg.msg.pcmtask;
 
@@ -1720,11 +1716,6 @@ static int abox_rdma_close(struct snd_pcm_substream *substream)
 		if (ret < 0)
 			dev_warn(dev, "call notify failed: %d\n", ret);
 	}
-
-	time = wait_for_completion_timeout(&data->closed,
-			nsecs_to_jiffies(ABOX_DMA_TIMEOUT_NS));
-	if (time == 0)
-		dev_err(dev, "%s: timeout\n", __func__);
 
 	/* Release ASRC to reuse it in other DMA */
 	abox_cmpnt_asrc_release(abox_data->cmpnt, SNDRV_PCM_STREAM_PLAYBACK, id);
@@ -1750,13 +1741,10 @@ static int abox_rdma_mmap(struct snd_pcm_substream *substream,
 	abox_request_cpu_gear_dai(dev, data->abox_data, rtd->cpu_dai,
 			data->abox_data->cpu_gear_min - 1);
 
-	if (data->buf_type == BUFFER_TYPE_ION)
-		return dma_buf_mmap(data->ion_buf.dma_buf, vma, 0);
-	else
-		return dma_mmap_writecombine(dev, vma,
-				runtime->dma_area,
-				runtime->dma_addr,
-				runtime->dma_bytes);
+	return dma_mmap_writecombine(dev, vma,
+			runtime->dma_area,
+			runtime->dma_addr,
+			runtime->dma_bytes);
 }
 
 static int abox_rdma_ack(struct snd_pcm_substream *substream)
@@ -2338,7 +2326,6 @@ static int samsung_abox_rdma_probe(struct platform_device *pdev)
 	init_waitqueue_head(&data->compr_data.flush_wait);
 	init_waitqueue_head(&data->compr_data.exit_wait);
 	init_waitqueue_head(&data->compr_data.ipc_wait);
-	init_completion(&data->closed);
 	data->compr_data.isr_handler = abox_rdma_compr_isr_handler;
 
 	abox_register_ipc_handler(data->dev_abox, IPC_PCMPLAYBACK,

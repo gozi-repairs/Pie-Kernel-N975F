@@ -199,7 +199,7 @@ static void fimc_is_sensor_init_expecting_dm(struct fimc_is_device_sensor *devic
 		goto p_err;
 	}
 
-	m_fcount = device->fcount % EXPECT_DM_NUM;
+	m_fcount = (device->fcount + 1) % EXPECT_DM_NUM;
 
 	module_ctl = &cis->sensor_ctls[m_fcount];
 	sensor_ctrl = &module_ctl->cur_cam20_sensor_ctrl;
@@ -222,7 +222,7 @@ static void fimc_is_sensor_init_expecting_dm(struct fimc_is_device_sensor *devic
 			exposureTime = sensor_ctrl->exposureTime;
 	}
 
-	for (i = m_fcount; i < m_fcount + EXPECT_DM_NUM; i++) {
+	for (i = m_fcount + 2; i < m_fcount + EXPECT_DM_NUM; i++) {
 		cis->expecting_sensor_dm[i % EXPECT_DM_NUM].sensitivity = sensitivity;
 		cis->expecting_sensor_dm[i % EXPECT_DM_NUM].exposureTime = exposureTime;
 
@@ -276,10 +276,11 @@ void fimc_is_sensor_set_cis_uctrl_list(struct fimc_is_device_sensor_peri *sensor
 		sensor_uctl = &sensor_peri->cis.sensor_ctls[i].cur_cam20_sensor_udctrl;
 
 		if (fimc_is_vender_wdr_mode_on(sensor_peri->cis.cis_data)) {
-			sensor_uctl->exposureTime = fimc_is_sensor_convert_us_to_ns(short_exp);
+			sensor_uctl->exposureTime = 0;
 			sensor_uctl->longExposureTime = fimc_is_sensor_convert_us_to_ns(long_exp);
 			sensor_uctl->shortExposureTime = fimc_is_sensor_convert_us_to_ns(short_exp);
 
+			sensor_uctl->sensitivity = long_total_gain;
 			sensor_uctl->analogGain = 0;
 			sensor_uctl->digitalGain = 0;
 
@@ -292,6 +293,7 @@ void fimc_is_sensor_set_cis_uctrl_list(struct fimc_is_device_sensor_peri *sensor
 			sensor_uctl->longExposureTime = 0;
 			sensor_uctl->shortExposureTime = 0;
 
+			sensor_uctl->sensitivity = long_total_gain;
 			sensor_uctl->analogGain = long_analog_gain;
 			sensor_uctl->digitalGain = long_digital_gain;
 
@@ -482,17 +484,10 @@ void fimc_is_sensor_setting_mode_change(struct fimc_is_device_sensor_peri *senso
 	u32 long_dgain = 0;
 	u32 frame_duration = 0;
 
-	struct fimc_is_sensor_ctl *module_ctl;
-	camera2_sensor_ctl_t *sensor_ctrl = NULL;
-
 	FIMC_BUG_VOID(!sensor_peri);
 
 	device = v4l2_get_subdev_hostdata(sensor_peri->subdev_cis);
 	FIMC_BUG_VOID(!device);
-
-	/* device->fcount + 1 = frame_count at copy_sensor_ctl */
-	module_ctl = &sensor_peri->cis.sensor_ctls[(device->fcount + 1) % EXPECT_DM_NUM];
-	sensor_ctrl = &module_ctl->cur_cam20_sensor_ctrl;
 
 	expo = sensor_peri->cis.mode_chg_expo;
 	again = sensor_peri->cis.mode_chg_again;
@@ -533,8 +528,6 @@ void fimc_is_sensor_setting_mode_change(struct fimc_is_device_sensor_peri *senso
 	fimc_is_sensor_peri_s_analog_gain(device, long_again, again);
 	fimc_is_sensor_peri_s_digital_gain(device, long_dgain, dgain);
 	fimc_is_sensor_peri_s_exposure_time(device, long_expo, expo);
-
-	fimc_is_sensor_set_test_pattern(device, sensor_ctrl);
 
 	sensor_peri->sensor_interface.cis_itf_ops.request_reset_expo_gain(&sensor_peri->sensor_interface,
 			long_expo,
@@ -1685,6 +1678,8 @@ int fimc_is_sensor_peri_s_stream(struct fimc_is_device_sensor *device,
 	}
 
 	if (on) {
+		fimc_is_sensor_init_expecting_dm(device, cis);
+
 		/* If sensor setting @work is queued or executing,
 		   wait for it to finish execution when working s_format */
 		kthread_flush_work(&sensor_peri->mode_change_work);
@@ -1744,8 +1739,6 @@ int fimc_is_sensor_peri_s_stream(struct fimc_is_device_sensor *device,
 		} else {
 			fimc_is_sensor_setting_mode_change(sensor_peri);
 		}
-
-		fimc_is_sensor_init_expecting_dm(device, cis);
 
 		if (subdev_preprocessor) {
 			ret = CALL_PREPROPOPS(preprocessor, preprocessor_wait_s_input, subdev_preprocessor);
@@ -2073,36 +2066,6 @@ int fimc_is_sensor_peri_s_digital_gain(struct fimc_is_device_sensor *device,
 	/* 0: Previous input, 1: Current input */
 	sensor_peri->cis.cis_data->digital_gain[0] = sensor_peri->cis.cis_data->digital_gain[1];
 	sensor_peri->cis.cis_data->digital_gain[1] = long_digital_gain;
-
-p_err:
-	return ret;
-}
-
-int fimc_is_sensor_set_test_pattern(struct fimc_is_device_sensor *device,
-				camera2_sensor_ctl_t *sensor_ctl)
-{
-	int ret = 0;
-	struct v4l2_subdev *subdev_module;
-
-	struct fimc_is_module_enum *module;
-	struct fimc_is_device_sensor_peri *sensor_peri = NULL;
-
-	BUG_ON(!device);
-	BUG_ON(!device->subdev_module);
-
-	subdev_module = device->subdev_module;
-
-	module = v4l2_get_subdevdata(subdev_module);
-	if (!module) {
-		err("module is NULL");
-		ret = -EINVAL;
-		goto p_err;
-	}
-	sensor_peri = (struct fimc_is_device_sensor_peri *)module->private_data;
-
-	ret = CALL_CISOPS(&sensor_peri->cis, cis_set_test_pattern, sensor_peri->subdev_cis, sensor_ctl);
-	if (ret < 0)
-		err("failed to set test pattern(%d)", ret);
 
 p_err:
 	return ret;

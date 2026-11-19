@@ -78,8 +78,9 @@ static int fimc_is_ischain_mxp_cfg(struct fimc_is_subdev *subdev,
 		msinfo("CRange:W\n", device, subdev);
 	} else {
 		crange = SCALER_OUTPUT_YUV_RANGE_NARROW;
-		if (!FIMC_IS_SKIP_PERFRAME_LOG(scenario_id))
+		if (scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_120FPS && scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_240FPS) {
 			msinfo("CRange:N\n", device, subdev);
+		}
 	}
 
 	mcs_output = fimc_is_itf_g_param(device, frame, subdev->param_dma_ot);
@@ -236,9 +237,6 @@ static int fimc_is_ischain_mxp_start(struct fimc_is_device_ischain *device,
 	int ret = 0;
 	struct fimc_is_fmt *format, *tmp_format;
 	struct param_otf_input *otf_input;
-#if ANDROID_VERSION >= 100000 /* Over Q */
-	u32 flip = mcs_output->flip;
-#endif
 	u32 crange;
 	int scenario_id = -1;
 
@@ -265,8 +263,9 @@ static int fimc_is_ischain_mxp_start(struct fimc_is_device_ischain *device,
 		mdbg_pframe("CRange:W\n", device, subdev, frame);
 	} else {
 		crange = SCALER_OUTPUT_YUV_RANGE_NARROW;
-		if (!FIMC_IS_SKIP_PERFRAME_LOG(scenario_id))
+		if (scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_120FPS && scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_240FPS) {
 			mdbg_pframe("CRange:N\n", device, subdev, frame);
+		}
 	}
 
 	if (node->pixelformat && format->pixelformat != node->pixelformat) { /* per-frame control for RGB */
@@ -293,18 +292,6 @@ static int fimc_is_ischain_mxp_start(struct fimc_is_device_ischain *device,
 		}
 	}
 
-#if ANDROID_VERSION >= 100000 /* Over Q */
-	if ((index >= PARAM_MCS_OUTPUT0 && index < PARAM_MCS_OUTPUT5) &&
-		frame->shot_ext->mcsc_flip[index - PARAM_MCS_OUTPUT0] != mcs_output->flip) {
-		flip = frame->shot_ext->mcsc_flip[index - PARAM_MCS_OUTPUT0];
-		queue->framecfg.flip = flip << 1;
-		mdbg_pframe("flip is changed(%d->%d)\n",
-			device, subdev, frame,
-			mcs_output->flip,
-			flip);
-	}
-#endif
-
 	mcs_output->otf_format = OTF_OUTPUT_FORMAT_YUV422;
 	mcs_output->otf_bitwidth = OTF_OUTPUT_BIT_WIDTH_8BIT;
 	mcs_output->otf_order = OTF_OUTPUT_ORDER_BAYER_GR_BG;
@@ -330,11 +317,7 @@ static int fimc_is_ischain_mxp_start(struct fimc_is_device_ischain *device,
 					queue->framecfg.bytesperline[1]), 16);
 
 	mcs_output->yuv_range = crange;
-#if ANDROID_VERSION >= 100000 /* Over Q */
-	mcs_output->flip = flip;
-#else
 	mcs_output->flip = (u32)queue->framecfg.flip >> 1; /* Caution: change from bitwise to enum */
-#endif
 
 #ifdef ENABLE_HWFC
 	if (test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &device->state))
@@ -473,9 +456,6 @@ static int fimc_is_ischain_mxp_tag(struct fimc_is_subdev *subdev,
 	u32 index, lindex, hindex, indexes;
 	u32 pixelformat = 0;
 	u32 *target_addr;
-#if ANDROID_VERSION >= 100000 /* Over Q */
-	bool change_flip = false;
-#endif
 	bool change_pixelformat = false;
 	int scenario_id = -1;
 
@@ -553,12 +533,6 @@ static int fimc_is_ischain_mxp_tag(struct fimc_is_subdev *subdev,
 			pixelformat = node->pixelformat;
 		}
 
-#if ANDROID_VERSION >= 100000 /* Over Q */
-		if ((index >= PARAM_MCS_OUTPUT0 && index < PARAM_MCS_OUTPUT5) &&
-			ldr_frame->shot_ext->mcsc_flip[index - PARAM_MCS_OUTPUT0] != mcs_output->flip)
-			change_flip = true;
-#endif
-
 		inparm.x = mcs_output->crop_offset_x;
 		inparm.y = mcs_output->crop_offset_y;
 		inparm.w = mcs_output->crop_width;
@@ -577,9 +551,6 @@ static int fimc_is_ischain_mxp_tag(struct fimc_is_subdev *subdev,
 
 		if (!COMPARE_CROP(incrop, &inparm) ||
 			!COMPARE_CROP(otcrop, &otparm) ||
-#if ANDROID_VERSION >= 100000 /* Over Q */
-			change_flip ||
-#endif
 			change_pixelformat ||
 			!test_bit(FIMC_IS_SUBDEV_RUN, &subdev->state) ||
 			test_bit(FIMC_IS_SUBDEV_FORCE_SET, &leader->state)) {
@@ -601,7 +572,7 @@ static int fimc_is_ischain_mxp_tag(struct fimc_is_subdev *subdev,
 				goto p_err;
 			}
 
-			if (!FIMC_IS_SKIP_PERFRAME_LOG(scenario_id)) {
+			if (scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_120FPS && scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_240FPS) {
 				mdbg_pframe("in_crop[%d, %d, %d, %d]\n", device, subdev, ldr_frame,
 					incrop->x, incrop->y, incrop->w, incrop->h);
 				mdbg_pframe("ot_crop[%d, %d, %d, %d]\n", device, subdev, ldr_frame,
@@ -653,8 +624,9 @@ static int fimc_is_ischain_mxp_tag(struct fimc_is_subdev *subdev,
 				goto p_err;
 			}
 
-			if (!FIMC_IS_SKIP_PERFRAME_LOG(scenario_id))
+			if (scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_120FPS && scenario_id != FIMC_IS_SN_VIDEO_HIGH_SPEED_240FPS) {
 				mdbg_pframe(" off\n", device, subdev, ldr_frame);
+			}
 		}
 
 		if ((node->vid - FIMC_IS_VIDEO_M0P_NUM)

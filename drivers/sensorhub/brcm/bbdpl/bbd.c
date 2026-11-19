@@ -36,7 +36,6 @@
 #ifdef CONFIG_SENSORS_SSP
 #include <linux/spi/spi.h>	//Needs because SSP is tightly coupled with SPI
 //#include <linux/spidev.h>
-#include <linux/spu-verify.h>
 
 extern struct spi_driver *pssp_driver;
 extern bool ssp_dbg;
@@ -134,45 +133,27 @@ static struct bbd_device bbd;
  */
 static unsigned char bbd_patch_old[] = {
 #if defined(CONFIG_SENSORS_SSP_BEYOND)
-#include "p_os/bbd_patch_file_beyond_old.h"
+#include "bbd_patch_file_beyond_old.h"
 #else
-#include "p_os/bbd_patch_file_beyond_old.h"
+#include "bbd_patch_file_beyond_old.h"
 #endif
 };
 
 static unsigned char bbd_patch_new_old[] = { // hw_rev 20 ~ hw_rev 23
 #if defined(CONFIG_SENSORS_SSP_BEYOND)
-#if ANDROID_VERSION < 100000
-#include "p_os/bbd_patch_file_beyond_new_old.h"
-#elif ANDROID_VERSION < 110000
-#include "q_os/bbd_patch_file_beyond_new_old.h"
+#include "bbd_patch_file_beyond_new_old.h"
 #else
-#include "r_os/bbd_patch_file_beyond_new_old.h"
-#endif
-#else
-#include "p_os/bbd_patch_file_beyond_new_old.h"
+#include "bbd_patch_file_beyond_new_old.h"
 #endif
 };
 
 static unsigned char bbd_patch[] = {
 #if defined(CONFIG_SENSORS_SSP_BEYOND)
-#if ANDROID_VERSION < 100000
-#include "p_os/bbd_patch_file_beyond.h"
-#elif ANDROID_VERSION < 110000
-#include "q_os/bbd_patch_file_beyond.h"
-#else
-#include "r_os/bbd_patch_file_beyond.h"
-#endif
+#include "bbd_patch_file_beyond.h"
 #elif defined(CONFIG_SENSORS_SSP_DAVINCI)
-#if ANDROID_VERSION < 100000
-#include "p_os/bbd_patch_file_davinci.h"
-#elif ANDROID_VERSION < 110000
-#include "q_os/bbd_patch_file_davinci.h"
+#include "bbd_patch_file_davinci.h"
 #else
-#include "r_os/bbd_patch_file_davinci.h"
-#endif
-#else
-#include "p_os/bbd_patch_file_beyond.h"
+#include "bbd_patch_file_beyond.h"
 #endif
 };
 
@@ -406,9 +387,8 @@ ssize_t bbd_pull_packet(unsigned char *buf, size_t size, unsigned int timeout_ms
 	struct circ_buf *circ = &bbd.priv[BBD_MINOR_SHMD].read_buf;
 	size_t rd_size = 0;
 
-
-//	WARN_ON(!buf);
-//	WARN_ON(!size);
+	WARN_ON(!buf);
+	WARN_ON(!size);
 
 	if (timeout_ms) {
 		int ret = wait_event_interruptible_timeout(
@@ -617,6 +597,9 @@ static int bbd_common_release(struct inode *inode, struct file *filp)
 {
 	unsigned int minor = iminor(inode);
 
+	BUG_ON(minor >= BBD_DEVICE_INDEX);
+
+	pr_info("%s[%s]++\n", __func__, bbd.priv[minor].name);
 	bbd.priv[minor].busy = false;
 	if (minor == BBD_MINOR_SENSOR) {
 		spin_lock(&bbd.lk.lock);
@@ -640,6 +623,7 @@ static ssize_t bbd_common_read(struct file *filp, char __user *buf, size_t size,
 	struct circ_buf *circ = &bbd.priv[minor].read_buf;
 	size_t rd_size = 0;
 
+	BUG_ON(minor >= BBD_DEVICE_INDEX);
 	//pr_info("%s[%s]++\n", __func__, bbd.priv[minor].name);
 
 	mutex_lock(&bbd.priv[minor].lock);
@@ -650,11 +634,8 @@ static ssize_t bbd_common_read(struct file *filp, char __user *buf, size_t size,
 	do {
 		size_t cnt_to_end = CIRC_CNT_TO_END(circ->head, circ->tail, BBD_BUFF_SIZE);
 		size_t copied = min(cnt_to_end, size);
-		int ret = copy_to_user(buf + rd_size, (void *) circ->buf + circ->tail, copied);
-		
-		if (ret < 0)
-			pr_err("[SSPBBD] %s: copy_to_user error(%d)", __func__, ret);
 
+		WARN_ON(copy_to_user(buf + rd_size, (void *) circ->buf + circ->tail, copied));
 		size -= copied;
 		rd_size += copied;
 		circ->tail = (circ->tail + copied) & (BBD_BUFF_SIZE - 1);
@@ -681,15 +662,12 @@ static ssize_t bbd_common_write(struct file *filp, const char __user *buf, size_
 {
 	unsigned int minor = iminor(filp->f_path.dentry->d_inode);
 	//struct bbd_device *bbd = filp->private_data;
-	int ret = 0;
 
 	//BUG_ON(size >= BBD_BUFF_SIZE);
 	if (size >= BBD_BUFF_SIZE)
 		return -EINVAL;
 
-	ret = copy_from_user(bbd.priv[minor].write_buf, buf, size);
-	if (ret < 0)
-		pr_err("[SSPBBD] %s: copy_from_user error(%d)", __func__, ret);
+	WARN_ON(copy_from_user(bbd.priv[minor].write_buf, buf, size));
 
 #ifdef DEBUG_1HZ_STAT
 	bbd_update_stat(STAT_TX_LHD, size);
@@ -707,6 +685,8 @@ static unsigned int bbd_common_poll(struct file *filp, poll_table *wait)
 	//struct bbd_device *bbd = filp->private_data;
 	struct circ_buf *circ = &bbd.priv[minor].read_buf;
 	unsigned int mask = 0;
+
+	BUG_ON(minor >= BBD_DEVICE_INDEX);
 
 	poll_wait(filp, &bbd.priv[minor].poll_wait, wait);
 
@@ -838,10 +818,16 @@ ssize_t bbd_patch_read(struct file *filp, char __user *buf, size_t size, loff_t 
 	return rd_size;
 }
 
+#define DIGEST_LEN 32
+#define SIGN_LEN 512
+#define URGENT_BUFFER_SIZE 4096
 #define URGENT_FIRMWARE_PATH "/spu/sensorhub/urgent.patch"
 
-static bool is_signed = false;
+char urgent_buffer[URGENT_BUFFER_SIZE] = {0, };
+static bool is_signed = true;
 static int urgent_patch_size = 0;
+
+//extern int spu_fireware_signature_verify(const char* fw_name, const char* fw_path);
 
 ssize_t bbd_urgent_patch_read(struct file *user_filp, char __user *buf, size_t size, loff_t *ppos)
 {
@@ -852,10 +838,30 @@ ssize_t bbd_urgent_patch_read(struct file *user_filp, char __user *buf, size_t s
 	struct file *filp = NULL;
 	loff_t fsize = 0;
 
-	char *urgent_buffer = NULL;
-
 	mm_segment_t old_fs = get_fs();
 	
+	// 01. verify signature
+	if (offset == 0) {
+		is_signed = false;
+		
+		ret = 0;
+		
+		if(ret != 0){
+			pr_err("[SSPBBD] %s : fail to spu_fireware_signature_verify %d", __func__, ret);
+			set_fs(old_fs);
+			ret = PTR_ERR(filp);
+
+			return ret;
+		} else
+			is_signed = true;
+
+	}
+
+	if (is_signed == false) {
+		pr_err("[SSPBBD] %s : urgent_patch is not signed", __func__);
+		return 0;
+	}
+
 	// 02. read binary from urgent.patch
 	set_fs(KERNEL_DS);
 	
@@ -869,64 +875,42 @@ ssize_t bbd_urgent_patch_read(struct file *user_filp, char __user *buf, size_t s
 	}
 
 	// 02-1. checking size of urgent.patch except for digest and signature
-	fsize = i_size_read(file_inode(filp));
-	urgent_buffer = kzalloc(fsize, GFP_KERNEL);
-
-	if (!urgent_buffer) {
-		pr_err("[SSPBBD] %s) can't alloc urgent_buffer\n", __func__);
-		ret = PTR_ERR(urgent_buffer);
-	
-		filp_close(filp, NULL);
-		set_fs(old_fs);
-
-		return ret;
+	if (offset == 0) {
+		fsize = i_size_read(file_inode(filp));
+		urgent_patch_size = fsize - DIGEST_LEN - SIGN_LEN;
+		pr_err("[SSPBBD] %s : patch size: %d", __func__, urgent_patch_size);
 	}
 
-	ret = vfs_read(filp, urgent_buffer, fsize, &filp->f_pos);
+	if (offset >= urgent_patch_size) {	// signal EOF 
+		pr_err("[SSPBBD] %s : signal EOF", __func__);
+
+		filp_close(filp, NULL);
+		set_fs(old_fs);
+		*ppos = 0;
+		return 0;
+	}
+
+	// 02-2. checking read size becuase it can make memory-overflow
+	if (offset + size > urgent_patch_size)
+		rd_size = urgent_patch_size - offset;
+
+	if (rd_size > URGENT_BUFFER_SIZE)
+		rd_size = URGENT_BUFFER_SIZE;
+
+	filp->f_pos = offset;
+
+	// 02-3. read requested size of urget_patch
+	pr_info("[SSPBBD] %s : download in progress (%d/%d)", __func__, filp->f_pos + rd_size, urgent_patch_size);
+	ret = vfs_read(filp, (char *)&urgent_buffer, rd_size, &filp->f_pos);
 
 	filp_close(filp, NULL);
 	set_fs(old_fs);
 
+	// 03. copy binary which is requested size of urgent.patch to user
 	if (ret < 0) {
 		pr_info("[SSPBBD] %s : fail to read urgent firmware file %d", __func__, ret);
 	} else {
-		is_signed = false;
-	
-		ret = spu_firmware_signature_verify("SENSORHUB", urgent_buffer, fsize);
-	
-		if(ret < 0){
-			pr_err("[SSPBBD] %s : fail to spu_fireware_signature_verify %d", __func__, ret);
-			set_fs(old_fs);
-			//ret = PTR_ERR(filp);
-			kfree(urgent_buffer);
-			return ret;
-		} else
-			is_signed = true;
-
-		if (is_signed == false) {
-			pr_err("[SSPBBD] %s : urgent_patch is not signed", __func__);
-			kfree(urgent_buffer);
-			return 0;
-		}
-
-		urgent_patch_size = ret;
-		pr_err("[SSPBBD] %s : total: %lld  patch size: %d", __func__, fsize, urgent_patch_size);
-
-		if (offset >= urgent_patch_size) {	// signal EOF 
-			pr_err("[SSPBBD] %s : signal EOF", __func__);
-
-			*ppos = 0;
-			kfree(urgent_buffer);
-			return 0;
-		}
-
-		if (offset + size > urgent_patch_size)
-			rd_size = urgent_patch_size - offset;
-
-		// 02-3. read requested size of urget_patch
-		pr_info("[SSPBBD] %s : download in progress (%lu/%d)", __func__, offset  + rd_size, urgent_patch_size);
-
-		if(copy_to_user(buf, (void *)(urgent_buffer + offset), rd_size)) {
+		if(copy_to_user(buf, (void *)urgent_buffer, rd_size)) {
 			pr_info("[SSPBBD] %s : copy to user from urgent_buffer", __func__);
 			rd_size = -EFAULT;
 		}
@@ -934,8 +918,6 @@ ssize_t bbd_urgent_patch_read(struct file *user_filp, char __user *buf, size_t s
 			*ppos = user_filp->f_pos + rd_size;
 
 	}
-
-	kfree(urgent_buffer);
 
 	return rd_size;
 }
@@ -1264,7 +1246,7 @@ int bbd_init(struct device *dev)
 	/* Create class which is required for device_create() */
 	bbd.class = class_create(THIS_MODULE, "bbd");
 	if (IS_ERR(bbd.class)) {
-		pr_err("BBD:%s() failed to create class \"bbd\"", __func__);
+		WARN("BBD:%s() failed to create class \"bbd\"", __func__);
 		goto exit;
 	}
 
@@ -1319,28 +1301,23 @@ int bbd_init(struct device *dev)
 
 	/* Register sysfs entry */
 	bbd.kobj = kobject_create_and_add("bbd", NULL);
-	if (!bbd.kobj) {
-		pr_err("BBD:%s() failed", __func__);
-		goto free_class;
-	}
-
+	BUG_ON(!bbd.kobj);
 	ret = sysfs_create_group(bbd.kobj, &bbd_group);
-	if (ret) {
-		pr_err("BBD:%s() failed. ret = %d", __func__, ret);
+	if (ret < 0) {
+		pr_err("%s failed to sysfs_create_group \"bbd\", ret = %d",
+							__func__, ret);
 		goto free_kobj;
 	}
 
 
 	/* Register PM */
 	ret = register_pm_notifier(&bbd_notifier_block);
-	if (ret) {
-		pr_err("BBD:%s() failed. ret = %d", __func__, ret);
-		goto remove_group;
-	}
+	BUG_ON(ret);
+
 #ifdef CONFIG_SENSORS_SSP
 	/* Now, we can initialize SSP */
-	ret = device_register(&dummy_spi.dev);
-	if (ret == 0) {
+	BUG_ON(device_register(&dummy_spi.dev));
+	{
 		struct spi_device *spi = to_spi_device(dev);
 		void *org_priv, *new_priv;
 
@@ -1349,9 +1326,7 @@ int bbd_init(struct device *dev)
 		new_priv = spi_get_drvdata(spi);
 		spi_set_drvdata(spi, org_priv);
 		spi_set_drvdata(&dummy_spi, new_priv);
-	} else {
-		pr_err("BBD:%s() failed, ret = %d", __func__, ret);
-		goto unregister_pm;
+
 	}
 #endif
 	ts1 = ktime_to_timespec(ktime_get_boottime());
@@ -1367,10 +1342,6 @@ int bbd_init(struct device *dev)
 #endif
 	return 0;
 
-unregister_pm:
-	unregister_pm_notifier(&bbd_notifier_block);
-remove_group:
-	sysfs_remove_group(bbd.kobj, &bbd_group);
 free_kobj:
 	kobject_put(bbd.kobj);
 free_class:
@@ -1395,7 +1366,6 @@ static void __exit bbd_exit(void)
 	/* Shutdown SSP first*/
 	pssp_driver->shutdown(&dummy_spi);
 #endif
-	unregister_pm_notifier(&bbd_notifier_block);
 
 	/* Remove sysfs entry */
 	sysfs_remove_group(bbd.kobj, &bbd_group);

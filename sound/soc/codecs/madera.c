@@ -16,9 +16,6 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/tlv.h>
-#ifdef CONFIG_MORO_SOUND
-#include "moro_sound.h"
-#endif
 
 #include <linux/mfd/madera/core.h>
 #include <linux/mfd/madera/registers.h>
@@ -29,15 +26,6 @@
 #include <dt-bindings/sound/madera.h>
 
 #include "madera.h"
-
-#ifdef CONFIG_MORO_SOUND
-// pointer to regmap
-static struct regmap *map;
-// Switches
-static int moro_sound, eq, reset = 0;
-static void set_eq(bool reset);
-static void reset_moro_sound(void);
-#endif
 
 #define MADERA_AIF_BCLK_CTRL			0x00
 #define MADERA_AIF_TX_PIN_CTRL			0x01
@@ -1393,10 +1381,6 @@ int madera_init_aif(struct snd_soc_codec *codec)
 	struct madera_priv *priv = snd_soc_codec_get_drvdata(codec);
 	struct madera *madera = priv->madera;
 	int ret;
-
-#ifdef CONFIG_MORO_SOUND
-	moro_sound_hook_madera_pcm_probe(madera->regmap);
-#endif
 
 	/* Update Sample Rate 1 to 48kHz for cases when no AIF1 hw_params */
 	ret = regmap_update_bits(madera->regmap, MADERA_SAMPLE_RATE_1,

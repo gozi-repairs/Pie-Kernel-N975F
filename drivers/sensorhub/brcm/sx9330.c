@@ -55,7 +55,7 @@
 				| MSK_IRQSTAT_RELEASE	\
 				| MSK_IRQSTAT_COMP)
 
-#define HALLIC_PATH		"/sys/class/sec/hall_ic/hall_detect"
+#define HALLIC_PATH		"/sys/class/sec/sec_key/hall_detect"
 
 struct sx9330_p {
 	struct i2c_client *client;
@@ -97,17 +97,15 @@ struct sx9330_p {
 	s32 max_normal_diff;
 
 	int debug_count;
-
-#define HALL_IC_LEN 6
-	char hall_ic[HALL_IC_LEN];
+	char hall_ic[6];
 };
 
-static int sx9330_check_hallic_state(char *file_path, char hall_ic_status[HALL_IC_LEN])
+static int sx9330_check_hallic_state(char *file_path, char hall_ic_status[])
 {
 	int iRet = 0;
 	mm_segment_t old_fs;
 	struct file *filep;
-	char hall_sysfs[HALL_IC_LEN];
+	char hall_sysfs[5];
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -129,7 +127,7 @@ static int sx9330_check_hallic_state(char *file_path, char hall_ic_status[HALL_I
 		set_fs(old_fs);
 		return -EIO;
 	} else {
-		strncpy(hall_ic_status, hall_sysfs, HALL_IC_LEN);
+		strncpy(hall_ic_status, hall_sysfs, sizeof(hall_sysfs));
 	}
 
 	filp_close(filep, current->files);
@@ -583,7 +581,7 @@ static ssize_t sx9330_set_offset_calibration_store(struct device *dev,
 static ssize_t sx9330_register_write_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	uint32_t regist, val = 0;
+	int regist = 0, val = 0;
 	struct sx9330_p *data = dev_get_drvdata(dev);
 
 	if (sscanf(buf, "%6x,%10x", &regist, &val) != 2) {
@@ -801,7 +799,7 @@ static ssize_t sx9330_avgthresh_show(struct device *dev,
 		(1 << (4 + MAIN_SENSOR)), &avgthresh);
 	avgthresh = (avgthresh & 0x3F000000) >> 24;
 
-	return snprintf(buf, PAGE_SIZE, "%u\n", 16384 * avgthresh);
+	return snprintf(buf, PAGE_SIZE, "%ld\n", 16384 * avgthresh);
 }
 
 static ssize_t sx9330_rawfilt_show(struct device *dev,
